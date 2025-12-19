@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "is_completely_disabled": False,
     "click_counter": 0,
     "inactivity_base": 7,
+    "post_action_delay": 0.75,  # Délai après action de pêche pour ignorer les sons parasites
     "selected_app": "",
     "show_delay": True,
     "show_volume": True,

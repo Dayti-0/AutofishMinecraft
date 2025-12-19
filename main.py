@@ -125,6 +125,7 @@ class AutoFishApp(tk.Tk):
         self.trigger_count = 0
         self.last_trigger_time = 0
         self.cooldown_period = 2
+        self.post_action_delay = self.config.get("post_action_delay", 0.75)
         self.current_volume_level = 0
 
         # Timing
@@ -622,11 +623,14 @@ class AutoFishApp(tk.Tk):
                                     self.trigger_count += 1
 
                                     if self.trigger_count >= 2:
+                                        # Bloquer immédiatement les nouveaux triggers
+                                        self.last_trigger_time = current_time
                                         threading.Thread(
                                             target=self.perform_right_clicks,
                                             daemon=True
                                         ).start()
-                                        self.last_trigger_time = current_time
+                                        # Note: last_trigger_time sera aussi mis à jour à la FIN
+                                        # de perform_right_clicks() avec le post_action_delay
                                         self.trigger_count = 0
                             else:
                                 if self.trigger_count > 0:
@@ -731,8 +735,15 @@ class AutoFishApp(tk.Tk):
             time.sleep(random.uniform(0.01, 0.03))
             win32gui.PostMessage(hwnd, win32con.WM_RBUTTONUP, 0, lParam2)
 
+            # Attendre le délai post-action avant de réactiver la détection
+            # Cela évite les faux déclenchements dus aux sons juste après la pêche
+            time.sleep(self.post_action_delay)
+
             self.last_click_time = time.time()
             self.last_activity_time = time.time()
+            # Mettre à jour last_trigger_time ICI (après les actions) pour que le cooldown
+            # commence après la fin des clics, pas avant
+            self.last_trigger_time = time.time()
 
             if increment_counter:
                 self.click_counter += 1
