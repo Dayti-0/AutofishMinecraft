@@ -25,6 +25,14 @@ from .ui_components import (
     translate_color
 )
 
+# Nouveaux modules de refactorisation
+from .app_state import AppState, DisplayOptions, DetectionParams, InactivityParams
+from .click_handler import ClickHandler
+from .monitoring import VolumeMonitor, InactivityMonitor, TempPauseMonitor
+from .keyboard_handler import KeyboardHandler
+from .overlay_manager import OverlayManager
+from .ui_builder import UIBuilder
+
 __all__ = [
     # config_manager
     'load_config',
@@ -51,4 +59,21 @@ __all__ = [
     'COLORS_MAP',
     'get_color_list',
     'translate_color',
+    # app_state
+    'AppState',
+    'DisplayOptions',
+    'DetectionParams',
+    'InactivityParams',
+    # click_handler
+    'ClickHandler',
+    # monitoring
+    'VolumeMonitor',
+    'InactivityMonitor',
+    'TempPauseMonitor',
+    # keyboard_handler
+    'KeyboardHandler',
+    # overlay_manager
+    'OverlayManager',
+    # ui_builder
+    'UIBuilder',
 ]
