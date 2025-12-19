@@ -150,6 +150,10 @@ class AutoFishApp(tk.Tk):
         self.temp_pause_remaining = 0
         self.temp_pause_start = 0
 
+        # Auto-pause pour inventaire et chat (seulement quand fenêtre au premier plan)
+        self.is_inventory_open = False
+        self.is_chat_open = False
+
         # Taux lissé
         self.last_rate = 0
         self.alpha = 0.3
@@ -423,14 +427,20 @@ class AutoFishApp(tk.Tk):
 
     def _create_info_bar(self):
         """Crée la barre d'information en bas."""
-        info_frame = tk.Frame(self, bg='#e0e0e0', height=30)
+        info_frame = tk.Frame(self, bg='#e0e0e0', height=40)
         info_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Label(
             info_frame,
-            text="F8: Pause | F9: Off | F10: Pause 15s | F11: Test rapide",
+            text="F8: Pause | F9: Off | F10: Pause 15s | F11: Test",
             font=('Arial', 8), bg='#e0e0e0'
-        ).pack(pady=2)
+        ).pack(pady=0)
+
+        tk.Label(
+            info_frame,
+            text="Auto-pause: E (inventaire) | T / : (chat) - si fenêtre active",
+            font=('Arial', 7), bg='#e0e0e0', fg='#666666'
+        ).pack(pady=0)
 
     def _create_overlays(self):
         """Crée les fenêtres overlay."""
@@ -481,6 +491,7 @@ class AutoFishApp(tk.Tk):
         """Configure le listener clavier."""
         def on_press(key):
             try:
+                # Touches de contrôle globales (fonctionnent toujours)
                 if key == keyboard.Key.f8:
                     self.toggle_pause()
                 elif key == keyboard.Key.f9:
@@ -489,6 +500,41 @@ class AutoFishApp(tk.Tk):
                     self.start_temp_pause(15)
                 elif key == keyboard.Key.f11:
                     self.test_click()
+
+                # Auto-pause pour inventaire/chat (seulement si fenêtre au premier plan)
+                # Si la fenêtre est en arrière-plan, on ne pause pas car le bot peut continuer
+                elif self.is_app_in_foreground:
+                    # Touche E - Toggle inventaire
+                    if hasattr(key, 'char') and key.char and key.char.lower() == 'e':
+                        if self.is_inventory_open:
+                            self.is_inventory_open = False
+                            logging.info("Inventaire fermé - Auto-pause désactivée")
+                        else:
+                            self.is_inventory_open = True
+                            logging.info("Inventaire ouvert - Auto-pause activée")
+                        self.update_pixel_color()
+
+                    # Touches T, / ou : - Ouverture du chat
+                    elif hasattr(key, 'char') and key.char and key.char.lower() in ('t', '/', ':'):
+                        self.is_chat_open = True
+                        logging.info("Chat ouvert - Auto-pause activée")
+                        self.update_pixel_color()
+
+                    # Touche Escape - Ferme inventaire ET chat
+                    elif key == keyboard.Key.esc:
+                        if self.is_inventory_open or self.is_chat_open:
+                            self.is_inventory_open = False
+                            self.is_chat_open = False
+                            logging.info("Inventaire/Chat fermé (Escape) - Auto-pause désactivée")
+                            self.update_pixel_color()
+
+                    # Touche Enter - Ferme le chat seulement
+                    elif key == keyboard.Key.enter:
+                        if self.is_chat_open:
+                            self.is_chat_open = False
+                            logging.info("Chat fermé (Enter) - Auto-pause désactivée")
+                            self.update_pixel_color()
+
             except Exception:
                 pass
 
@@ -528,13 +574,20 @@ class AutoFishApp(tk.Tk):
         """Thread principal de monitoring du volume."""
         while self.is_running:
             try:
+                # Toujours mettre à jour le statut du focus de la fenêtre
+                app_name = self.app_var.get()
+                if app_name and self.app_pid:
+                    self.is_app_in_foreground = is_application_in_foreground(self.app_pid)
+
+                # Vérifier si on doit exécuter les actions
+                # Note: is_inventory_open et is_chat_open ne bloquent que si fenêtre au premier plan
                 if (not self.is_completely_disabled and
                         not self.is_paused and
-                        self.temp_pause_remaining == 0):
+                        self.temp_pause_remaining == 0 and
+                        not self.is_inventory_open and
+                        not self.is_chat_open):
 
-                    app_name = self.app_var.get()
                     if app_name and self.app_pid:
-                        self.is_app_in_foreground = is_application_in_foreground(self.app_pid)
 
                         volume = get_app_volume(app_name)
                         if volume is not None:
@@ -592,6 +645,8 @@ class AutoFishApp(tk.Tk):
                 if (not self.is_completely_disabled and
                         not self.is_paused and
                         self.temp_pause_remaining == 0 and
+                        not self.is_inventory_open and
+                        not self.is_chat_open and
                         not self.auto_calibrator.is_calibrating):
 
                     time_since_last = time.time() - self.last_activity_time
@@ -821,6 +876,8 @@ class AutoFishApp(tk.Tk):
             color = "orange"
         elif self.is_paused:
             color = "red"
+        elif self.is_inventory_open or self.is_chat_open:
+            color = "#FFD700"  # Or/Jaune pour auto-pause (inventaire/chat)
         else:
             color = "green"
 
@@ -832,6 +889,15 @@ class AutoFishApp(tk.Tk):
     def toggle_pause(self):
         """Bascule l'état de pause."""
         self.is_paused = not self.is_paused
+
+        # Réinitialiser le timer d'inactivité pour éviter un clic immédiat à la reprise
+        self.last_activity_time = time.time()
+        self.inactivity_trigger_count = 0
+        self.inactivity_delay = random.uniform(
+            self.inactivity_base - 2,
+            self.inactivity_base + 2
+        )
+
         self.save_current_config()
         self.update_pixel_color()
         logging.info(f"État: {'En pause' if self.is_paused else 'Actif'}")
