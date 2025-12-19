@@ -19,25 +19,22 @@ import win32api
 from pynput import keyboard
 
 # Imports des modules locaux
-from config_manager import load_config, save_config
-from audio_processing import (
+from src import (
+    load_config,
+    save_config,
     get_running_applications,
     get_app_volume,
     volume_to_db,
-    db_to_normalized_scale
-)
-from window_management import (
+    db_to_normalized_scale,
     get_process_id_by_name,
     is_application_in_foreground,
     get_hwnds_for_pid,
-    bring_window_to_front
-)
-from human_behavior import HumanProfile, HumanLikeRandomizer
-from stats_manager import StatsManager
-from calibration import AutoCalibrator
-from ui_components import (
+    bring_window_to_front,
+    HumanProfile,
+    HumanLikeRandomizer,
+    StatsManager,
+    AutoCalibrator,
     VolumeGraphBar,
-    COLORS_MAP,
     get_color_list,
     translate_color
 )
