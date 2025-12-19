@@ -438,7 +438,7 @@ class AutoFishApp(tk.Tk):
 
         tk.Label(
             info_frame,
-            text="Auto-pause: E (inventaire) | / : (chat) - si fenêtre active",
+            text="Auto-pause: E (inventaire) | T / : (chat) - si fenêtre active",
             font=('Arial', 7), bg='#e0e0e0', fg='#666666'
         ).pack(pady=0)
 
@@ -514,8 +514,8 @@ class AutoFishApp(tk.Tk):
                             logging.info("Inventaire ouvert - Auto-pause activée")
                         self.update_pixel_color()
 
-                    # Touches / ou : - Ouverture du chat
-                    elif hasattr(key, 'char') and key.char in ('/', ':'):
+                    # Touches T, / ou : - Ouverture du chat
+                    elif hasattr(key, 'char') and key.char and key.char.lower() in ('t', '/', ':'):
                         self.is_chat_open = True
                         logging.info("Chat ouvert - Auto-pause activée")
                         self.update_pixel_color()
