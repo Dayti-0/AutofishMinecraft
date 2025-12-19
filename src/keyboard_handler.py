@@ -99,13 +99,23 @@ class KeyboardHandler:
             self._close_all_menus()
 
         # Touche Enter - Ferme le chat seulement
-        elif key == keyboard.Key.enter:
+        elif self._is_enter_key(key):
             self._close_chat()
 
     def _is_char_key(self, key, *chars) -> bool:
         """Verifie si la touche correspond a un caractere."""
         if hasattr(key, 'char') and key.char:
             return key.char.lower() in chars
+        return False
+
+    def _is_enter_key(self, key) -> bool:
+        """Verifie si la touche est Enter (toutes variantes)."""
+        # Touche Enter standard
+        if key == keyboard.Key.enter:
+            return True
+        # Caracteres retour chariot/nouvelle ligne (pave numerique ou autres claviers)
+        if hasattr(key, 'char') and key.char in ('\r', '\n'):
+            return True
         return False
 
     def _toggle_inventory(self):
