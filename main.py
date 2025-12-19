@@ -301,6 +301,29 @@ class AutoFishApp(tk.Tk):
             font=('Arial', 8), bg='#f0f0f0'
         ).pack(side=tk.LEFT, padx=5)
 
+        # Section Inactivité
+        inactivity_frame = tk.Frame(main_tab, bg='#f0f0f0')
+        inactivity_frame.pack(fill=tk.X, padx=5, pady=3)
+
+        tk.Label(
+            inactivity_frame, text="Clic si inactif:",
+            font=('Arial', 9), bg='#f0f0f0'
+        ).pack(side=tk.LEFT)
+
+        self.inactivity_scale = tk.Scale(
+            inactivity_frame, from_=3, to=30, resolution=1,
+            orient=tk.HORIZONTAL, length=120, command=self.update_inactivity,
+            bg='#f0f0f0', highlightbackground='#f0f0f0', showvalue=False
+        )
+        self.inactivity_scale.set(self.inactivity_base)
+        self.inactivity_scale.pack(side=tk.LEFT, padx=3)
+
+        self.inactivity_label = tk.Label(
+            inactivity_frame, text=f"{self.inactivity_base}s (±2s)",
+            font=('Arial', 9, 'bold'), bg='#f0f0f0'
+        )
+        self.inactivity_label.pack(side=tk.LEFT)
+
         # Section Statistiques
         stats_frame = tk.LabelFrame(
             main_tab, text="Statistiques",
@@ -658,6 +681,7 @@ class AutoFishApp(tk.Tk):
                     if time_since_last > self.inactivity_delay:
                         self.inactivity_trigger_count += 1
                         if self.inactivity_trigger_count >= 2:
+                            logging.info(f"Inactivité détectée ({time_since_last:.1f}s) - Clic automatique")
                             threading.Thread(
                                 target=self.perform_single_right_click,
                                 daemon=True
@@ -667,6 +691,9 @@ class AutoFishApp(tk.Tk):
                                 self.inactivity_base + 2
                             )
                             self.inactivity_trigger_count = 0
+                    else:
+                        # Réinitialiser le compteur si une activité récente a eu lieu
+                        self.inactivity_trigger_count = 0
 
                 time.sleep(1)
 
@@ -689,6 +716,11 @@ class AutoFishApp(tk.Tk):
     def perform_right_clicks(self, increment_counter=True):
         """Effectue les clics droits avec randomisation humaine."""
         try:
+            # Réinitialiser immédiatement les compteurs d'inactivité pour éviter
+            # les déclenchements en parallèle pendant l'exécution des clics
+            self.last_activity_time = time.time()
+            self.inactivity_trigger_count = 0
+
             app_name = self.app_var.get()
             if not self.app_pid:
                 self.app_pid = get_process_id_by_name(app_name)
@@ -765,6 +797,10 @@ class AutoFishApp(tk.Tk):
     def perform_single_right_click(self, increment_counter=True):
         """Effectue un seul clic droit."""
         try:
+            # Réinitialiser immédiatement les compteurs d'inactivité
+            self.last_activity_time = time.time()
+            self.inactivity_trigger_count = 0
+
             app_name = self.app_var.get()
             if not self.app_pid:
                 self.app_pid = get_process_id_by_name(app_name)
@@ -836,6 +872,17 @@ class AutoFishApp(tk.Tk):
             self.max_delay_scale.set(self.max_delay)
 
         self.delay_display_var.set(f"{self.min_delay:.2f} - {self.max_delay:.2f}s")
+
+    def update_inactivity(self, value):
+        """Met à jour le délai d'inactivité."""
+        self.inactivity_base = int(float(value))
+        self.inactivity_label.config(text=f"{self.inactivity_base}s (±2s)")
+        # Recalculer le délai d'inactivité avec la nouvelle base
+        self.inactivity_delay = random.uniform(
+            self.inactivity_base - 2,
+            self.inactivity_base + 2
+        )
+        self.save_current_config()
 
     def update_stats_display(self):
         """Met à jour l'affichage des statistiques."""
