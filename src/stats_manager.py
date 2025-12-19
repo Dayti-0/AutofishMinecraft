@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from config_manager import get_stats_file_path
+from .config_manager import get_stats_file_path
 
 
 class StatsManager:
