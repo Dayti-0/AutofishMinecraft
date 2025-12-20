@@ -264,9 +264,10 @@ class PixelIndicator(tk.Toplevel):
 
 class TransparentLabel(tk.Toplevel):
     """
-    Label flottant avec fond transparent.
+    Label flottant avec fond semi-transparent.
 
-    Utilisé pour afficher des informations en overlay.
+    Utilisé pour afficher des informations en overlay avec un fond
+    gris foncé semi-transparent pour une meilleure lisibilité.
     """
 
     def __init__(
@@ -278,7 +279,7 @@ class TransparentLabel(tk.Toplevel):
         fg_color: str = 'lime'
     ):
         """
-        Initialise le label transparent.
+        Initialise le label avec fond semi-transparent.
 
         Args:
             master: Widget parent.
@@ -295,20 +296,22 @@ class TransparentLabel(tk.Toplevel):
         # Configuration de la fenêtre
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.attributes("-alpha", 1.0)
+        self.attributes("-alpha", 0.85)
         self.geometry(f"+{position[0]}+{position[1]}")
 
-        # Rendre le fond transparent
-        self.attributes('-transparentcolor', 'black')
-        self.configure(bg='black')
+        # Couleur inutilisée pour la transparence du fond de fenêtre
+        self.attributes('-transparentcolor', '#010101')
+        self.configure(bg='#010101')
 
-        # Créer le label
+        # Créer le label avec fond gris foncé semi-transparent
         self.label = tk.Label(
             self,
             textvariable=text_var,
             font=font,
-            bg='black',
-            fg=fg_color
+            bg='#1a1a1a',
+            fg=fg_color,
+            padx=6,
+            pady=2
         )
         self.label.pack()
 

@@ -57,21 +57,24 @@ class OverlayManager:
         self._keep_indicator_on_top()
 
     def _create_delay_label(self):
-        """Cree le label d'affichage transparent."""
+        """Cree le label d'affichage avec fond semi-transparent."""
         self.delay_label_window = tk.Toplevel(self.parent)
         self.delay_label_window.overrideredirect(True)
         self.delay_label_window.attributes("-topmost", True)
-        self.delay_label_window.attributes("-alpha", 1.0)
+        self.delay_label_window.attributes("-alpha", 0.85)
         self.delay_label_window.geometry("+30+5")
-        self.delay_label_window.attributes('-transparentcolor', 'black')
-        self.delay_label_window.configure(bg='black')
+        # Utiliser une couleur inutilisee pour la transparence
+        self.delay_label_window.attributes('-transparentcolor', '#010101')
+        self.delay_label_window.configure(bg='#010101')
 
         self.delay_label = tk.Label(
             self.delay_label_window,
             textvariable=self.delay_label_var,
             font=('Arial', 11, 'bold'),
-            bg='black',
-            fg=translate_color(self.state.display.text_color)
+            bg='#1a1a1a',  # Fond gris fonce semi-transparent
+            fg=translate_color(self.state.display.text_color),
+            padx=6,
+            pady=2
         )
         self.delay_label.pack()
         self._keep_text_on_top()
