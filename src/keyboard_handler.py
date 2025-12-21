@@ -86,11 +86,20 @@ class KeyboardHandler:
 
     def _handle_game_keys(self, key):
         """Gere les touches liees au jeu."""
+        # Si le chat est ouvert, seuls Escape et Enter sont pris en compte
+        if self.state.is_chat_open:
+            if key == keyboard.Key.esc:
+                self._close_all_menus()
+            elif self._is_enter_key(key):
+                self._close_chat()
+            # Ignorer toutes les autres touches (y compris t, /, :)
+            return
+
         # Touche E - Toggle inventaire
         if self._is_char_key(key, 'e'):
             self._toggle_inventory()
 
-        # Touches T, / ou : - Ouverture du chat
+        # Touches T, / ou : - Ouverture du chat (seulement si chat pas deja ouvert)
         elif self._is_char_key(key, 't', '/', ':'):
             self._open_chat()
 
