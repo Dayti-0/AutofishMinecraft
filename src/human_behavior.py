@@ -1,6 +1,7 @@
 """
 Module de simulation du comportement humain.
 Gère la randomisation réaliste des délais et positions de clic.
+Version améliorée avec distribution log-normale, bruit de Perlin et mémoire contextuelle.
 """
 
 import time
@@ -8,8 +9,9 @@ import random
 import logging
 import collections
 import numpy as np
+from datetime import datetime
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List
 
 
 @dataclass
@@ -73,6 +75,52 @@ class HumanProfile:
         return cls(**data)
 
 
+class PerlinNoise:
+    """
+    Générateur de bruit de Perlin pour variations organiques.
+    Produit des variations douces et continues, plus naturelles que le random pur.
+    """
+
+    def __init__(self, seed: Optional[int] = None):
+        """Initialise le générateur de bruit de Perlin."""
+        self.seed = seed or random.randint(0, 1000000)
+        np.random.seed(self.seed)
+        self.p = np.arange(256, dtype=int)
+        np.random.shuffle(self.p)
+        self.p = np.concatenate([self.p, self.p])
+
+    def fade(self, t: np.ndarray) -> np.ndarray:
+        """Fonction de lissage 6t^5 - 15t^4 + 10t^3."""
+        return t * t * t * (t * (t * 6 - 15) + 10)
+
+    def lerp(self, a: float, b: float, t: float) -> float:
+        """Interpolation linéaire."""
+        return a + t * (b - a)
+
+    def grad(self, hash_val: int, x: float) -> float:
+        """Calcule le gradient."""
+        return x if (hash_val & 1) == 0 else -x
+
+    def noise(self, x: float) -> float:
+        """
+        Génère du bruit de Perlin 1D.
+
+        Args:
+            x: Position où évaluer le bruit.
+
+        Returns:
+            Valeur de bruit entre -1 et 1.
+        """
+        X = int(np.floor(x)) & 255
+        x -= np.floor(x)
+        u = self.fade(x)
+
+        a = self.p[X]
+        b = self.p[X + 1]
+
+        return self.lerp(self.grad(a, x), self.grad(b, x - 1), u)
+
+
 class HumanLikeRandomizer:
     """
     Système avancé de randomisation simulant le comportement humain.
@@ -108,10 +156,21 @@ class HumanLikeRandomizer:
         self.streak_counter = 0
         self.last_pattern_type = None
 
+        # Nouvelles améliorations pour comportement ultra-réaliste
+        self.perlin = PerlinNoise()
+        self.perlin_offset = random.random() * 1000
+        self.delay_memory: List[float] = []  # Mémoire des délais pour autocorrélation
+        self.distraction_threshold = random.uniform(0.98, 0.995)  # Seuil de distraction
+        self.last_distraction_time = time.time()
+        self.micro_habits: Dict[str, float] = {}  # Micro-habitudes personnelles
+        self.skill_improvement_rate = random.uniform(0.0001, 0.0005)  # Taux d'apprentissage
+        self.action_quality = 0.5  # Qualité d'exécution (s'améliore avec le temps)
+
         logging.info(
             f"Profil '{self.profile.name}': "
             f"V={self.profile.reaction_speed:.2f}, "
-            f"C={self.profile.consistency:.2f}"
+            f"C={self.profile.consistency:.2f}, "
+            f"Distraction={self.distraction_threshold:.3f}"
         )
 
     def get_fatigue_factor(self) -> float:
@@ -183,6 +242,135 @@ class HumanLikeRandomizer:
 
         return (v1 + v2 + v3 + v4) * self.profile.rhythm_variation
 
+    def get_circadian_rhythm_factor(self) -> float:
+        """
+        Calcule le facteur basé sur le rythme circadien (heure de la journée).
+
+        Les humains ont des performances variables selon l'heure:
+        - Matin: réveil progressif
+        - Midi-après-midi: pic de performance
+        - Soir: fatigue croissante
+        - Nuit: performance réduite
+
+        Returns:
+            Facteur multiplicateur (0.8 à 1.2).
+        """
+        now = datetime.now()
+        hour = now.hour + now.minute / 60.0
+
+        # Courbe circadienne basée sur l'heure
+        if 6 <= hour < 9:  # Réveil
+            return 1.0 + (hour - 6) / 3 * 0.1
+        elif 9 <= hour < 14:  # Pic matinal
+            return 0.95 - random.uniform(0, 0.1)
+        elif 14 <= hour < 17:  # Après-midi
+            return 1.0 + random.uniform(0, 0.15)
+        elif 17 <= hour < 22:  # Soirée
+            return 1.05 + (hour - 17) / 5 * 0.15
+        else:  # Nuit
+            return 1.2 + random.uniform(0, 0.3)
+
+    def get_perlin_noise_variation(self) -> float:
+        """
+        Génère une variation basée sur le bruit de Perlin.
+
+        Le bruit de Perlin produit des variations organiques et continues,
+        simulant les fluctuations naturelles de performance humaine.
+
+        Returns:
+            Variation entre -0.15 et 0.15.
+        """
+        current_time = time.time() - self.session_start
+        # Utiliser plusieurs octaves de bruit de Perlin
+        noise1 = self.perlin.noise((current_time + self.perlin_offset) * 0.05) * 0.1
+        noise2 = self.perlin.noise((current_time + self.perlin_offset) * 0.2) * 0.05
+        return noise1 + noise2
+
+    def check_distraction(self) -> bool:
+        """
+        Détermine si une distraction se produit.
+
+        Simule les moments où l'attention se relâche (notification, pensée, etc.).
+
+        Returns:
+            True si une distraction se produit.
+        """
+        # Éviter les distractions trop fréquentes
+        time_since_last = time.time() - self.last_distraction_time
+        if time_since_last < 30:  # Au minimum 30s entre distractions
+            return False
+
+        # Probabilité de distraction inversement proportionnelle à la concentration
+        distraction_prob = (1.0 - self.profile.concentration_level) * 0.05
+        if random.random() < distraction_prob:
+            self.last_distraction_time = time.time()
+            return True
+
+        return False
+
+    def get_delay_from_memory(self, base_delay: float) -> float:
+        """
+        Utilise la mémoire des délais précédents pour créer une autocorrélation.
+
+        Les humains ont tendance à répéter des patterns similaires inconsciemment.
+
+        Args:
+            base_delay: Délai de base calculé.
+
+        Returns:
+            Délai ajusté basé sur la mémoire.
+        """
+        if not self.delay_memory:
+            return base_delay
+
+        # Calculer la moyenne pondérée des derniers délais
+        recent_delays = list(self.delay_memory)[-5:]
+        weights = [0.4, 0.25, 0.2, 0.1, 0.05][:len(recent_delays)]
+        weights = weights[::-1]  # Les plus récents ont plus de poids
+
+        memory_influence = sum(d * w for d, w in zip(recent_delays, weights)) / sum(weights)
+
+        # Mélanger le délai de base avec l'influence de la mémoire
+        consistency_factor = self.profile.consistency
+        return base_delay * (1 - consistency_factor * 0.3) + memory_influence * consistency_factor * 0.3
+
+    def apply_skill_progression(self) -> float:
+        """
+        Simule l'amélioration progressive des compétences.
+
+        Avec la pratique, les temps de réaction s'améliorent légèrement.
+
+        Returns:
+            Facteur de réduction du délai (0.95 à 1.0).
+        """
+        # La qualité s'améliore lentement jusqu'à un plateau
+        self.action_quality = min(1.0, self.action_quality + self.skill_improvement_rate)
+
+        # Réduction maximale de 5% du délai après beaucoup de pratique
+        improvement = (self.action_quality - 0.5) * 0.1
+        return 1.0 - improvement
+
+    def get_lognormal_delay(self, mean: float, variation: float) -> float:
+        """
+        Génère un délai suivant une distribution log-normale.
+
+        Les temps de réaction humains suivent mieux une distribution log-normale
+        qu'une distribution normale, car ils sont bornés à gauche (>0) et ont
+        une queue longue vers la droite (délais occasionnels très longs).
+
+        Args:
+            mean: Délai moyen souhaité.
+            variation: Variation relative (0.1 = 10%).
+
+        Returns:
+            Délai généré selon distribution log-normale.
+        """
+        # Paramètres de la log-normale pour obtenir la moyenne souhaitée
+        sigma = np.sqrt(np.log(1 + variation**2))
+        mu = np.log(mean) - sigma**2 / 2
+
+        return np.random.lognormal(mu, sigma)
+
     def select_behavior_pattern(self) -> str:
         """
         Sélectionne un pattern comportemental de manière cohérente.
@@ -228,7 +416,15 @@ class HumanLikeRandomizer:
         is_boost: bool = False
     ) -> float:
         """
-        Génère un délai avec comportement humain réaliste.
+        Génère un délai avec comportement humain ultra-réaliste.
+
+        Version améliorée utilisant:
+        - Distribution log-normale (temps de réaction humains réels)
+        - Bruit de Perlin (variations organiques)
+        - Mémoire contextuelle (autocorrélation)
+        - Distractions aléatoires
+        - Rythme circadien
+        - Progression des compétences
 
         Args:
             min_delay: Délai minimum en secondes.
@@ -252,59 +448,94 @@ class HumanLikeRandomizer:
         base_mean = (min_delay + max_delay) / 2
         pattern_info = self.BEHAVIOR_PATTERNS[pattern]
 
-        # Calculer le délai selon le pattern
+        # AMÉLIORATION 1: Utiliser distribution log-normale au lieu de gaussienne
+        # Les temps de réaction humains suivent cette distribution
         if pattern == 'steady':
-            delay = random.gauss(base_mean, base_mean * pattern_info['variation'])
+            delay = self.get_lognormal_delay(base_mean, pattern_info['variation'])
         elif pattern == 'accelerating':
             progress = min(1.0, self.streak_counter / 10)
-            delay = max_delay - (max_delay - min_delay) * progress * 0.7
-            delay += random.gauss(0, base_mean * pattern_info['variation'])
+            target_mean = max_delay - (max_delay - min_delay) * progress * 0.7
+            delay = self.get_lognormal_delay(target_mean, pattern_info['variation'])
         elif pattern == 'decelerating':
             progress = min(1.0, self.streak_counter / 10)
-            delay = min_delay + (max_delay - min_delay) * progress * 0.7
-            delay += random.gauss(0, base_mean * pattern_info['variation'])
+            target_mean = min_delay + (max_delay - min_delay) * progress * 0.7
+            delay = self.get_lognormal_delay(target_mean, pattern_info['variation'])
         elif pattern == 'erratic':
+            # Pour erratic, garder une distribution uniforme mais avec pics occasionnels
             delay = random.uniform(min_delay, max_delay)
-            if random.random() < 0.2:
-                delay *= random.choice([0.5, 1.8])
+            if random.random() < 0.15:
+                delay *= random.choice([0.6, 1.9])
         elif pattern == 'rhythmic':
             rhythm_base = base_mean + np.sin(self.action_count * 0.5) * \
                 (max_delay - min_delay) * 0.3
-            delay = random.gauss(rhythm_base, base_mean * pattern_info['variation'])
+            delay = self.get_lognormal_delay(max(min_delay, rhythm_base), pattern_info['variation'] * 0.8)
         else:  # tired
-            delay = random.gauss(max_delay * 0.9, base_mean * pattern_info['variation'])
+            delay = self.get_lognormal_delay(max_delay * 0.9, pattern_info['variation'] * 1.2)
 
-        # Mode boost: délais plus courts
+        # Mode boost: délais plus courts mais toujours réalistes
         if is_boost:
-            if random.random() < 0.9:
-                sub_range = min_delay + 0.2 * (max_delay - min_delay)
-                delay = random.uniform(min_delay, sub_range)
+            if random.random() < 0.85:
+                boost_mean = min_delay + 0.25 * (max_delay - min_delay)
+                delay = self.get_lognormal_delay(boost_mean, 0.15)
             else:
-                delay = random.uniform(min_delay, max_delay)
+                delay = self.get_lognormal_delay(base_mean * 0.7, 0.2)
 
-        # Appliquer les modificateurs
+        # AMÉLIORATION 2: Appliquer la mémoire contextuelle (autocorrélation)
+        delay = self.get_delay_from_memory(delay)
+
+        # AMÉLIORATION 3: Bruit de Perlin pour variations organiques
+        perlin_variation = self.get_perlin_noise_variation()
+        delay *= (1.0 + perlin_variation)
+
+        # AMÉLIORATION 4: Rythme circadien (heure de la journée)
+        circadian_factor = self.get_circadian_rhythm_factor()
+        delay *= circadian_factor
+
+        # AMÉLIORATION 5: Progression des compétences
+        skill_factor = self.apply_skill_progression()
+        delay *= skill_factor
+
+        # Appliquer les modificateurs classiques
         delay *= self.profile.reaction_speed
         delay *= self.get_fatigue_factor()
         delay *= self.get_concentration_wave()
         delay += self.get_micro_variations()
 
+        # AMÉLIORATION 6: Distractions aléatoires
+        if self.check_distraction():
+            distraction_delay = random.uniform(0.5, 2.5)
+            delay += distraction_delay
+            logging.info(f"💭 Distraction: +{distraction_delay:.2f}s")
+
         # Contexte
         if context.get('urgent'):
-            delay *= 0.7
+            delay *= random.uniform(0.65, 0.75)
         if context.get('repetition', 0) > 10:
-            delay *= 1.1
+            # Fatigue mentale sur actions répétitives
+            repetition_factor = 1.0 + (context.get('repetition', 0) - 10) * 0.01
+            delay *= min(1.3, repetition_factor)
 
-        # Contraindre aux limites avec légère flexibilité
+        # Contraindre aux limites avec flexibilité humaine
+        # Un humain peut occasionnellement dépasser les limites
         if delay < min_delay:
-            if random.random() < 0.95:
-                delay = min_delay + random.uniform(0, 0.05)
+            if random.random() < 0.90:
+                # La plupart du temps, respecter le minimum
+                delay = min_delay + random.uniform(0, 0.08)
             else:
-                delay = max(min_delay * 0.9, delay)
+                # Rarement, être légèrement plus rapide
+                delay = max(min_delay * 0.85, delay)
         elif delay > max_delay:
-            if random.random() < 0.95:
-                delay = max_delay - random.uniform(0, 0.05)
+            if random.random() < 0.92:
+                # Souvent, respecter le maximum
+                delay = max_delay - random.uniform(0, 0.1)
             else:
-                delay = min(max_delay * 1.1, delay)
+                # Parfois, être un peu plus lent (distraction légère)
+                delay = min(max_delay * 1.15, delay)
+
+        # AMÉLIORATION 7: Enregistrer dans la mémoire pour autocorrélation future
+        self.delay_memory.append(delay)
+        if len(self.delay_memory) > 50:
+            self.delay_memory.pop(0)
 
         self.last_delays.append(delay)
         self.last_action_time = time.time()
@@ -368,3 +599,13 @@ class HumanLikeRandomizer:
         self.action_count = 0
         self.fatigue_accumulator = 0.0
         self.last_delays.clear()
+        self.delay_memory.clear()
+        self.action_quality = 0.5
+        self.last_distraction_time = time.time()
+
+        # Régénérer certains paramètres aléatoires pour varier les sessions
+        self.perlin = PerlinNoise()
+        self.perlin_offset = random.random() * 1000
+        self.distraction_threshold = random.uniform(0.98, 0.995)
+
+        logging.info(f"🔄 Session réinitialisée - Nouveau profil de variation généré")
