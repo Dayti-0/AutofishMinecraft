@@ -135,6 +135,7 @@ class VolumeMonitor:
 
                 if self.state.trigger_count >= 2:
                     self.state.last_trigger_time = current_time
+                    self.state.last_catch_time = current_time  # Mise a jour du timestamp de prise
                     threading.Thread(target=self.on_trigger, daemon=True).start()
                     self.state.trigger_count = 0
         else:
@@ -250,3 +251,72 @@ class TempPauseMonitor:
                     self.on_pause_end()
 
             time.sleep(0.5)
+
+
+class AutoCastMonitor:
+    """
+    Moniteur d'auto-cast.
+
+    Declenche automatiquement un recast si aucune prise n'est detectee apres un certain delai.
+    """
+
+    def __init__(
+        self,
+        state: 'AppState',
+        calibrator: 'AutoCalibrator',
+        on_auto_cast: Callable
+    ):
+        """
+        Initialise le moniteur d'auto-cast.
+
+        Args:
+            state: Etat de l'application
+            calibrator: Calibrateur automatique
+            on_auto_cast: Callback lors du declenchement de l'auto-cast
+        """
+        self.state = state
+        self.calibrator = calibrator
+        self.on_auto_cast = on_auto_cast
+        self._thread = None
+
+    def start(self):
+        """Demarre le monitoring dans un thread."""
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+
+    def _monitor_loop(self):
+        """Boucle principale de verification de l'auto-cast."""
+        while self.state.is_running:
+            try:
+                if not self._should_check_auto_cast():
+                    time.sleep(1)
+                    continue
+
+                time_since_last_catch = time.time() - self.state.last_catch_time
+
+                if time_since_last_catch > self.state.auto_cast.current_delay:
+                    logging.info(
+                        f"Aucune prise depuis {time_since_last_catch:.1f}s - Auto-cast"
+                    )
+                    threading.Thread(target=self.on_auto_cast, daemon=True).start()
+                    self._reset_auto_cast_delay()
+
+                time.sleep(1)
+
+            except Exception as e:
+                logging.error(f"Erreur auto-cast: {e}")
+                time.sleep(5)
+
+    def _should_check_auto_cast(self) -> bool:
+        """Verifie si l'auto-cast doit etre surveille."""
+        return (
+            self.state.auto_cast.enabled and
+            self.state.is_action_allowed() and
+            not self.calibrator.is_calibrating
+        )
+
+    def _reset_auto_cast_delay(self):
+        """Reinitialise le delai d'auto-cast."""
+        base = self.state.auto_cast.base_delay
+        self.state.auto_cast.current_delay = random.uniform(base - 2, base + 2)
+        self.state.last_catch_time = time.time()

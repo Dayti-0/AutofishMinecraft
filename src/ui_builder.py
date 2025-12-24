@@ -55,6 +55,8 @@ class UIBuilder:
         self.max_delay_scale = None
         self.inactivity_scale = None
         self.inactivity_label = None
+        self.auto_cast_scale = None
+        self.auto_cast_label = None
         self.stats_text = None
         self.profile_label = None
         self.calibration_button = None
@@ -80,6 +82,7 @@ class UIBuilder:
         self._create_threshold_section(main_tab)
         self._create_delay_section(main_tab)
         self._create_inactivity_section(main_tab)
+        self._create_auto_cast_section(main_tab)
         self._create_stats_section(main_tab)
 
     def _create_app_section(self, parent: tk.Frame):
@@ -213,6 +216,32 @@ class UIBuilder:
             font=('Arial', 9, 'bold'), bg='#f0f0f0'
         )
         self.inactivity_label.pack(side=tk.LEFT)
+
+    def _create_auto_cast_section(self, parent: tk.Frame):
+        """Cree la section de reglage de l'auto-cast."""
+        auto_cast_frame = tk.Frame(parent, bg='#f0f0f0')
+        auto_cast_frame.pack(fill=tk.X, padx=5, pady=3)
+
+        tk.Label(
+            auto_cast_frame, text="Auto-cast si pas de prise:",
+            font=('Arial', 9), bg='#f0f0f0'
+        ).pack(side=tk.LEFT)
+
+        self.auto_cast_scale = tk.Scale(
+            auto_cast_frame, from_=5, to=60, resolution=1,
+            orient=tk.HORIZONTAL, length=120,
+            command=self.callbacks['update_auto_cast'],
+            bg='#f0f0f0', highlightbackground='#f0f0f0', showvalue=False
+        )
+        self.auto_cast_scale.set(self.state.auto_cast.base_delay)
+        self.auto_cast_scale.pack(side=tk.LEFT, padx=3)
+
+        self.auto_cast_label = tk.Label(
+            auto_cast_frame,
+            text=f"{self.state.auto_cast.base_delay}s (+/-2s)",
+            font=('Arial', 9, 'bold'), bg='#f0f0f0'
+        )
+        self.auto_cast_label.pack(side=tk.LEFT)
 
     def _create_stats_section(self, parent: tk.Frame):
         """Cree la section des statistiques."""
@@ -382,6 +411,10 @@ class UIBuilder:
     def update_inactivity_display(self, value: int):
         """Met a jour l'affichage de l'inactivite."""
         self.inactivity_label.config(text=f"{value}s (+/-2s)")
+
+    def update_auto_cast_display(self, value: int):
+        """Met a jour l'affichage de l'auto-cast."""
+        self.auto_cast_label.config(text=f"{value}s (+/-2s)")
 
     def update_boost_button(self, is_boost: bool):
         """Met a jour le bouton boost."""

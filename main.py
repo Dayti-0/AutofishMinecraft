@@ -30,7 +30,7 @@ from src import (
 )
 from src.app_state import AppState
 from src.click_handler import ClickHandler
-from src.monitoring import VolumeMonitor, InactivityMonitor, TempPauseMonitor
+from src.monitoring import VolumeMonitor, InactivityMonitor, TempPauseMonitor, AutoCastMonitor
 from src.keyboard_handler import KeyboardHandler
 from src.overlay_manager import OverlayManager
 from src.ui_builder import UIBuilder
@@ -119,6 +119,12 @@ class AutoFishApp(tk.Tk):
             on_inactivity=self.click_handler.perform_single_right_click
         )
 
+        self.auto_cast_monitor = AutoCastMonitor(
+            state=self.state,
+            calibrator=self.auto_calibrator,
+            on_auto_cast=self.click_handler.perform_double_right_click
+        )
+
         self.temp_pause_monitor = TempPauseMonitor(
             state=self.state,
             on_pause_end=self._update_indicator
@@ -142,6 +148,7 @@ class AutoFishApp(tk.Tk):
             'update_threshold': self._on_threshold_change,
             'update_delays': self._on_delays_change,
             'update_inactivity': self._on_inactivity_change,
+            'update_auto_cast': self._on_auto_cast_change,
             'start_calibration': self.start_auto_calibration,
             'generate_profile': self.generate_new_profile,
             'set_preset': self.set_preset_profile,
@@ -169,6 +176,7 @@ class AutoFishApp(tk.Tk):
         """Demarre tous les threads de monitoring."""
         self.volume_monitor.start()
         self.inactivity_monitor.start()
+        self.auto_cast_monitor.start()
         self.temp_pause_monitor.start()
 
         # Thread de sauvegarde auto
@@ -213,6 +221,14 @@ class AutoFishApp(tk.Tk):
         self.state.inactivity.base_delay = base
         self.state.inactivity.current_delay = random.uniform(base - 2, base + 2)
         self.ui.update_inactivity_display(base)
+        self.save_current_config()
+
+    def _on_auto_cast_change(self, value):
+        """Callback pour changement d'auto-cast."""
+        base = int(float(value))
+        self.state.auto_cast.base_delay = base
+        self.state.auto_cast.current_delay = random.uniform(base - 2, base + 2)
+        self.ui.update_auto_cast_display(base)
         self.save_current_config()
 
     def _update_indicator(self):

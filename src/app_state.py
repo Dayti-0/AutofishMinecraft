@@ -40,6 +40,14 @@ class InactivityParams:
     trigger_count: int = 0
 
 
+@dataclass
+class AutoCastParams:
+    """Parametres de gestion de l'auto-cast."""
+    enabled: bool = True
+    base_delay: int = 20
+    current_delay: float = 20.0
+
+
 class AppState:
     """
     Classe centralisee pour gerer l'etat de l'application.
@@ -80,6 +88,14 @@ class AppState:
             current_delay=random.uniform(inactivity_base - 2, inactivity_base + 2)
         )
 
+        # Auto-cast
+        auto_cast_base = self.config.get("auto_cast_base", 20)
+        self.auto_cast = AutoCastParams(
+            enabled=self.config.get("auto_cast_enabled", True),
+            base_delay=auto_cast_base,
+            current_delay=random.uniform(auto_cast_base - 2, auto_cast_base + 2)
+        )
+
         # Options d'affichage
         self.display = DisplayOptions(
             show_delay=self.config.get("show_delay", True),
@@ -99,6 +115,7 @@ class AppState:
         # Timing
         self.last_click_time: float = time.time()
         self.last_activity_time: float = time.time()
+        self.last_catch_time: float = time.time()  # Timestamp de la derniere prise (poisson)
         self.start_time: float = time.time()
 
         # Compteurs
@@ -124,6 +141,14 @@ class AppState:
         self.inactivity.current_delay = random.uniform(
             self.inactivity.base_delay - 2,
             self.inactivity.base_delay + 2
+        )
+
+    def reset_auto_cast(self):
+        """Reinitialise le timer d'auto-cast."""
+        self.last_catch_time = time.time()
+        self.auto_cast.current_delay = random.uniform(
+            self.auto_cast.base_delay - 2,
+            self.auto_cast.base_delay + 2
         )
 
     def update_activity(self):
@@ -174,6 +199,8 @@ class AppState:
             "is_completely_disabled": self.is_completely_disabled,
             "click_counter": self.click_counter,
             "inactivity_base": self.inactivity.base_delay,
+            "auto_cast_base": self.auto_cast.base_delay,
+            "auto_cast_enabled": self.auto_cast.enabled,
             "selected_app": self.selected_app,
             "show_delay": self.display.show_delay,
             "show_volume": self.display.show_volume,

@@ -29,7 +29,9 @@ DEFAULT_CONFIG = {
     "show_rate": True,
     "text_color": "Vert clair",
     "is_boost_mode": False,
-    "human_profile": None
+    "human_profile": None,
+    "auto_cast_base": 20,  # Délai en secondes avant auto-cast si aucune prise
+    "auto_cast_enabled": True  # Activer/désactiver l'auto-cast
 }
 
 
